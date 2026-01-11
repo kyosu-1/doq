@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>doq</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .date {
+      text-align: center;
+      color: #999;
+      font-size: 14px;
+      margin-bottom: 32px;
+    }
+
+    .input-area {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+
+    .input-area input {
+      flex: 1;
+      padding: 14px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      background: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .input-area input:focus {
+      outline: none;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+    }
+
+    .input-area button {
+      padding: 14px 24px;
+      border: none;
+      border-radius: 8px;
+      background: #4a90d9;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .input-area button:hover {
+      background: #3a7fc8;
+    }
+
+    .queue-label {
+      font-size: 12px;
+      color: #999;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .todo-list {
+      list-style: none;
+    }
+
+    .todo-item {
+      display: flex;
+      align-items: center;
+      background: white;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      cursor: grab;
+      transition: all 0.2s;
+      border-left: 4px solid transparent;
+    }
+
+    .todo-item:active {
+      cursor: grabbing;
+    }
+
+    .todo-item.dragging {
+      opacity: 0.5;
+      transform: scale(1.02);
+    }
+
+    .todo-item.drag-over {
+      border-top: 2px solid #4a90d9;
+    }
+
+    .todo-item.current {
+      background: linear-gradient(135deg, #4a90d9 0%, #357abd 100%);
+      border-left-color: #2d6aa3;
+      box-shadow: 0 4px 16px rgba(74, 144, 217, 0.3);
+    }
+
+    .todo-item.current .todo-text {
+      color: white;
+      font-weight: 600;
+    }
+
+    .todo-item.current .todo-time {
+      color: rgba(255,255,255,0.7);
+    }
+
+    .todo-item.current .done-btn {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border-color: rgba(255,255,255,0.3);
+    }
+
+    .todo-item.current .done-btn:hover {
+      background: rgba(255,255,255,0.3);
+    }
+
+    .drag-handle {
+      color: #ccc;
+      margin-right: 12px;
+      font-size: 14px;
+      cursor: grab;
+    }
+
+    .todo-item.current .drag-handle {
+      color: rgba(255,255,255,0.5);
+    }
+
+    .todo-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .todo-text {
+      color: #333;
+      font-size: 16px;
+    }
+
+    .todo-time {
+      color: #aaa;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    .done-btn {
+      padding: 8px 16px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: white;
+      color: #666;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .done-btn:hover {
+      background: #4a90d9;
+      border-color: #4a90d9;
+      color: white;
+    }
+
+    .empty-state {
+      text-align: center;
+      color: #999;
+      padding: 60px 20px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .empty-state p {
+      font-size: 16px;
+    }
+
+    .count {
+      text-align: center;
+      color: #999;
+      font-size: 14px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>doq</h1>
+    <p class="date" id="today-date"></p>
+
+    <div class="input-area">
+      <input type="text" id="todo-input" placeholder="タスクを追加..." autofocus>
+      <button onclick="addTodo()">追加</button>
+    </div>
+
+    <div id="queue-section">
+      <p class="queue-label">Next up</p>
+      <ul class="todo-list" id="todo-list"></ul>
+      <p class="count" id="count"></p>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'queue-todos';
+    let todos = [];
+    let draggedItem = null;
+
+    function init() {
+      displayDate();
+      loadTodos();
+      render();
+    }
+
+    function displayDate() {
+      const today = new Date();
+      const options = { month: 'long', day: 'numeric', weekday: 'long' };
+      document.getElementById('today-date').textContent = today.toLocaleDateString('ja-JP', options);
+    }
+
+    function loadTodos() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        const today = new Date().toDateString();
+        if (data.date === today) {
+          todos = data.todos;
+        } else {
+          todos = [];
+          saveTodos();
+        }
+      }
+    }
+
+    function saveTodos() {
+      const data = {
+        date: new Date().toDateString(),
+        todos: todos
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function addTodo() {
+      const input = document.getElementById('todo-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      todos.push({
+        id: Date.now(),
+        text: text,
+        createdAt: new Date().toISOString()
+      });
+
+      input.value = '';
+      saveTodos();
+      render();
+    }
+
+    function completeTodo(id) {
+      const item = document.querySelector(`[data-id="${id}"]`);
+      if (item) {
+        item.style.transform = 'translateX(100%)';
+        item.style.opacity = '0';
+        setTimeout(() => {
+          todos = todos.filter(t => t.id !== id);
+          saveTodos();
+          render();
+        }, 200);
+      }
+    }
+
+    function render() {
+      const list = document.getElementById('todo-list');
+      const section = document.getElementById('queue-section');
+      const countEl = document.getElementById('count');
+
+      if (todos.length === 0) {
+        section.innerHTML = '<div class="empty-state"><p>タスクがありません</p></div>';
+        return;
+      }
+
+      section.innerHTML = `
+        <p class="queue-label">Next up</p>
+        <ul class="todo-list" id="todo-list"></ul>
+        <p class="count" id="count"></p>
+      `;
+
+      const newList = document.getElementById('todo-list');
+      const newCount = document.getElementById('count');
+
+      newList.innerHTML = todos.map((todo, index) => `
+        <li class="todo-item ${index === 0 ? 'current' : ''}"
+            data-id="${todo.id}"
+            draggable="true">
+          <span class="drag-handle">⋮⋮</span>
+          <div class="todo-content">
+            <div class="todo-text">${escapeHtml(todo.text)}</div>
+            <div class="todo-time">${formatTime(todo.createdAt)}</div>
+          </div>
+          <button class="done-btn" onclick="completeTodo(${todo.id})">完了</button>
+        </li>
+      `).join('');
+
+      newCount.textContent = `${todos.length}件のタスク`;
+
+      setupDragAndDrop();
+    }
+
+    function setupDragAndDrop() {
+      const items = document.querySelectorAll('.todo-item');
+
+      items.forEach(item => {
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragend', handleDragEnd);
+        item.addEventListener('dragover', handleDragOver);
+        item.addEventListener('drop', handleDrop);
+        item.addEventListener('dragleave', handleDragLeave);
+      });
+    }
+
+    function handleDragStart(e) {
+      draggedItem = this;
+      this.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function handleDragEnd(e) {
+      this.classList.remove('dragging');
+      document.querySelectorAll('.todo-item').forEach(item => {
+        item.classList.remove('drag-over');
+      });
+      draggedItem = null;
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (this !== draggedItem) {
+        this.classList.add('drag-over');
+      }
+    }
+
+    function handleDragLeave(e) {
+      this.classList.remove('drag-over');
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      this.classList.remove('drag-over');
+
+      if (this !== draggedItem) {
+        const fromId = parseInt(draggedItem.dataset.id);
+        const toId = parseInt(this.dataset.id);
+
+        const fromIndex = todos.findIndex(t => t.id === fromId);
+        const toIndex = todos.findIndex(t => t.id === toId);
+
+        const [moved] = todos.splice(fromIndex, 1);
+        todos.splice(toIndex, 0, moved);
+
+        saveTodos();
+        render();
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatTime(isoString) {
+      if (!isoString) return '';
+      const date = new Date(isoString);
+      const h = date.getHours();
+      const m = String(date.getMinutes()).padStart(2, '0');
+      return `${h}:${m}`;
+    }
+
+    document.getElementById('todo-input').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') addTodo();
+    });
+
+    init();
+  </script>
+</body>
+</html>
