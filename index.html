@@ -238,23 +238,12 @@
     function loadTodos() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        const data = JSON.parse(saved);
-        const today = new Date().toDateString();
-        if (data.date === today) {
-          todos = data.todos;
-        } else {
-          todos = [];
-          saveTodos();
-        }
+        todos = JSON.parse(saved);
       }
     }
 
     function saveTodos() {
-      const data = {
-        date: new Date().toDateString(),
-        todos: todos
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
     }
 
     function addTodo() {
@@ -389,9 +378,16 @@
     function formatTime(isoString) {
       if (!isoString) return '';
       const date = new Date(isoString);
+      const today = new Date();
+      const isToday = date.toDateString() === today.toDateString();
       const h = date.getHours();
       const m = String(date.getMinutes()).padStart(2, '0');
-      return `${h}:${m}`;
+      if (isToday) {
+        return `${h}:${m}`;
+      }
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      return `${month}/${day} ${h}:${m}`;
     }
 
     document.getElementById('todo-input').addEventListener('keypress', (e) => {
